@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediKiosk - Smart Patient Triage & Management System</title>
+  <!-- Tailwind CSS for modern styling -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <!-- Chart.js for graphical urgency representation -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- GSAP for cinematic entrance animations -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <!-- FontAwesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --background: #0A0A0F;
+      --background-alt: #12121A;
+      --foreground: #FAFAFA;
+      --muted: #1A1A24;
+      --muted-foreground: #71717A;
+      --accent: #F59E0B;
+      --accent-foreground: #0A0A0F;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.15);
+      --card: rgba(26, 26, 36, 0.6);
+    }
+
+    * { -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: "Inter", system-ui, sans-serif;
+      background-color: var(--background);
+      color: var(--foreground);
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, .font-display {
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      letter-spacing: -0.025em;
+    }
+
+    .font-mono2 { font-family: "JetBrains Mono", monospace; }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at 50% 20%, rgba(245, 158, 11, 0.06) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header, main, footer { position: relative; z-index: 1; }
+
+    .glass-card {
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: all 300ms ease-out;
+    }
+
+    button, select, input, textarea { min-height: 48px; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-foreground);
+      border: none;
+      border-radius: 12px;
+      font-weight: 500;
+      padding: 0.75rem 1.25rem;
+      transition: all 200ms ease-out;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover { filter: brightness(1.1); box-shadow: 0 0 20px rgba(245, 158, 11, 0.4); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--foreground);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      font-weight: 500;
+      padding: 0.75rem 1.25rem;
+      transition: all 200ms ease-out;
+      cursor: pointer;
+    }
+
+    .btn-outline:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.25); }
+
+    .input-dark {
+      background: rgba(26, 26, 36, 0.6);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      height: 48px;
+      color: var(--foreground);
+      width: 100%;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+      outline: none;
+      transition: all 200ms ease-out;
+    }
+
+    textarea.input-dark { height: auto; padding-top: 0.75rem; }
+    select.input-dark option { background: #1A1A24; color: #FAFAFA; }
+    .input-dark:focus { border-color: rgba(245, 158, 11, 0.5); box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2); }
+
+    .voice-bar {
+      position: fixed; bottom: 20px; right: 20px; z-index: 100;
+      background: rgba(26, 26, 36, 0.9); backdrop-filter: blur(12px);
+      border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px;
+      padding: 8px 16px; display: flex; align-items: center; gap: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    }
+    .mic-btn {
+      width: 48px; height: 48px; border-radius: 50%; background: var(--accent);
+      color: var(--accent-foreground); display: flex; align-items: center;
+      justify-content: center; border: none; cursor: pointer; font-size: 1.1rem;
+    }
+    .mic-btn.listening { background: #ef4444; color: white; animation: pulse-mic 1.5s infinite; }
+    @keyframes pulse-mic {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .view-section.view-enter { animation: view-rise 300ms ease-out; }
+    @keyframes view-rise {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body class="font-sans min-h-screen flex flex-col" style="background-color:#0A0A0F;color:#FAFAFA;">
+
+  <!-- Voice Assist Widget -->
+  <div class="voice-bar" aria-label="Voice command tool">
+    <div class="hidden sm:block text-xs font-mono2 text-slate-300"><span id="voice-status-text">Voice Ready</span></div>
+    <button id="voice-trigger-btn" class="mic-btn" onclick="toggleVoiceListening()" title="Tap to Speak"><i class="fa-solid fa-microphone"></i></button>
+  </div>
+
+  <!-- Header -->
+  <header class="shadow-md border-b" style="background:rgba(10,10,15,0.85);backdrop-filter:blur(8px);border-color:rgba(255,255,255,0.08);">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('home')">
+        <i class="fa-solid fa-hospital-user text-2xl text-amber-500"></i>
+        <span class="text-2xl font-bold tracking-tight font-display">MediKiosk</span>
+      </div>
+      <nav id="nav-auth" class="hidden md:flex space-x-2">
+        <button onclick="switchTab('patient-auth')" class="btn-outline px-3 py-2 text-sm">Patient Portal</button>
+        <button onclick="switchTab('donor-auth')" class="btn-outline px-3 py-2 text-sm text-red-400 border-red-500/30">Donor Portal</button>
+        <button onclick="switchTab('doctor-auth')" class="btn-outline px-3 py-2 text-sm">Doctor Portal</button>
+        <button onclick="switchTab('lab-auth')" class="btn-outline px-3 py-2 text-sm">Lab Tech</button>
+        <button onclick="switchTab('pharmacy-auth')" class="btn-outline px-3 py-2 text-sm">Pharmacy</button>
+        <button onclick="switchTab('admin-auth')" class="btn-primary px-3 py-2 text-sm">Admin</button>
+      </nav>
+      <div id="nav-user" class="hidden flex items-center space-x-4">
+        <span id="user-welcome" class="font-medium text-sm text-slate-400"></span>
+        <button onclick="logout()" class="btn-outline px-3 py-1.5 text-sm">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-6 py-8">
+
+    <!-- HOME / LANDING VIEW -->
+    <section id="view-home" class="view-section py-16 text-center space-y-6">
+      <div class="max-w-3xl mx-auto space-y-4">
+        <span class="px-4 py-1.5 rounded-full text-xs font-mono2 text-amber-500 bg-amber-500/10 border border-amber-500/20">AUTOMATED URGENCY &amp; SPECIALIST TRIAGE HUB</span>
+        <h1 class="font-display text-4xl sm:text-5xl font-bold">Smart Patient Triage, Auto-Urgency & Clinical Summaries</h1>
+        <p class="text-slate-400">Select your portal below to log in or register.</p>
+        <div class="flex flex-wrap justify-center gap-3 pt-4">
+          <button onclick="switchTab('patient-auth')" class="btn-primary">Patient Portal</button>
+          <button onclick="switchTab('donor-auth')" class="btn-outline border-red-500/50 text-red-400">Blood Donor Portal</button>
+          <button onclick="switchTab('doctor-auth')" class="btn-outline">Doctor Portal</button>
+          <button onclick="switchTab('lab-auth')" class="btn-outline">Lab Tech Portal</button>
+          <button onclick="switchTab('pharmacy-auth')" class="btn-outline">Pharmacy Portal</button>
+          <button onclick="switchTab('admin-auth')" class="btn-outline border-amber-500 text-amber-500">Admin Portal</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PATIENT AUTH VIEW -->
+    <section id="view-patient-auth" class="view-section hidden max-w-md mx-auto glass-card p-8">
+      <h2 class="text-2xl font-bold text-amber-500 mb-6 text-center"><i class="fa-solid fa-user-injured mr-2"></i>Patient Portal</h2>
+      <div class="flex border-b mb-6">
+        <button onclick="toggleAuthMode('patient', 'login')" id="p-login-tab" class="flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500">Login</button>
+        <button onclick="toggleAuthMode('patient', 'register')" id="p-reg-tab" class="flex-1 pb-2 font-semibold text-slate-400">Register</button>
+      </div>
+      <form id="form-patient-register" onsubmit="handlePatientRegister(event)" class="space-y-4 hidden">
+        <div><label class="block text-sm font-medium mb-1">Full Name</label><input type="text" id="reg-p-name" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="reg-p-email" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="reg-p-pass" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Age</label><input type="number" id="reg-p-age" required class="input-dark"></div>
+        <button type="submit" class="btn-primary w-full py-3">Register Patient</button>
+      </form>
+      <form id="form-patient-login" onsubmit="handlePatientLogin(event)" class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="login-p-email" required class="input-dark" placeholder="demo.patient@gmail.com"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="login-p-pass" required class="input-dark" placeholder="Demo@2026"></div>
+        <button type="submit" class="btn-primary w-full py-3">Patient Log In</button>
+      </form>
+    </section>
+
+    <!-- DONOR AUTH VIEW -->
+    <section id="view-donor-auth" class="view-section hidden max-w-md mx-auto glass-card p-8">
+      <h2 class="text-2xl font-bold text-red-400 mb-6 text-center"><i class="fa-solid fa-hand-holding-droplet mr-2"></i>Blood Donor Portal</h2>
+      <div class="flex border-b mb-6">
+        <button onclick="toggleAuthMode('donor', 'login')" id="donor-login-tab" class="flex-1 pb-2 font-semibold border-b-2 border-red-500 text-red-400">Login</button>
+        <button onclick="toggleAuthMode('donor', 'register')" id="donor-reg-tab" class="flex-1 pb-2 font-semibold text-slate-400">Register</button>
+      </div>
+      <form id="form-donor-register" onsubmit="handleDonorRegister(event)" class="space-y-4 hidden">
+        <div><label class="block text-sm font-medium mb-1">Donor Full Name</label><input type="text" id="reg-donor-name" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="reg-donor-email" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="reg-donor-pass" required class="input-dark"></div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Blood Group</label>
+          <select id="reg-donor-blood" required class="input-dark">
+            <option value="">Select Blood Group</option>
+            <option value="A+">A+</option><option value="A-">A-</option>
+            <option value="B+">B+</option><option value="B-">B-</option>
+            <option value="O+">O+</option><option value="O-">O-</option>
+            <option value="AB+">AB+</option><option value="AB-">AB-</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary w-full py-3 bg-red-600 hover:bg-red-500 text-white">Register as Donor</button>
+      </form>
+      <form id="form-donor-login" onsubmit="handleDonorLogin(event)" class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Donor Email ID</label><input type="email" id="login-donor-email" required class="input-dark" placeholder="demo.donor@gmail.com"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="login-donor-pass" required class="input-dark" placeholder="Donor@2026"></div>
+        <button type="submit" class="btn-primary w-full py-3 bg-red-600 hover:bg-red-500 text-white">Donor Log In</button>
+      </form>
+    </section>
+
+    <!-- DOCTOR AUTH VIEW -->
+    <section id="view-doctor-auth" class="view-section hidden max-w-md mx-auto glass-card p-8">
+      <h2 class="text-2xl font-bold text-amber-500 mb-6 text-center"><i class="fa-solid fa-user-doctor mr-2"></i>Doctor Portal</h2>
+      <div class="flex border-b mb-6">
+        <button onclick="toggleAuthMode('doctor', 'login')" id="d-login-tab" class="flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500">Login</button>
+        <button onclick="toggleAuthMode('doctor', 'register')" id="d-reg-tab" class="flex-1 pb-2 font-semibold text-slate-400">Register</button>
+      </div>
+      <form id="form-doctor-register" onsubmit="handleDoctorRegister(event)" class="space-y-4 hidden">
+        <div><label class="block text-sm font-medium mb-1">Full Name</label><input type="text" id="reg-d-name" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="reg-d-email" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="reg-d-pass" required class="input-dark"></div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Specialization</label>
+          <select id="reg-d-spec" required class="input-dark">
+            <option value="">Select Specialty</option>
+            <option value="Cardiologist">Cardiologist</option>
+            <option value="Dermatologist">Dermatologist</option>
+            <option value="Neurologist">Neurologist</option>
+            <option value="Orthopedician">Orthopedician</option>
+            <option value="Pediatrician">Pediatrician</option>
+            <option value="Gynecologist">Gynecologist</option>
+            <option value="Ophthalmologist">Ophthalmologist</option>
+            <option value="Endocrinologist">Endocrinologist</option>
+            <option value="Gastroenterologist">Gastroenterologist</option>
+            <option value="Nephrologist">Nephrologist</option>
+            <option value="Urologist">Urologist</option>
+            <option value="Pulmonologist">Pulmonologist</option>
+            <option value="Oncologist">Oncologist</option>
+            <option value="Psychiatrist">Psychiatrist</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary w-full py-3">Register Doctor</button>
+      </form>
+      <form id="form-doctor-login" onsubmit="handleDoctorLogin(event)" class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="login-d-email" required class="input-dark" placeholder="demo.doctor@gmail.com"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="login-d-pass" required class="input-dark" placeholder="Demo@2026"></div>
+        <button type="submit" class="btn-primary w-full py-3">Log In</button>
+      </form>
+    </section>
+
+    <!-- LAB TECH AUTH VIEW -->
+    <section id="view-lab-auth" class="view-section hidden max-w-md mx-auto glass-card p-8">
+      <h2 class="text-2xl font-bold text-amber-500 mb-6 text-center"><i class="fa-solid fa-flask mr-2"></i>Lab Technician Portal</h2>
+      <div class="flex border-b mb-6">
+        <button onclick="toggleAuthMode('lab', 'login')" id="l-login-tab" class="flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500">Login</button>
+        <button onclick="toggleAuthMode('lab', 'register')" id="l-reg-tab" class="flex-1 pb-2 font-semibold text-slate-400">Register</button>
+      </div>
+      <form id="form-lab-register" onsubmit="handleLabRegister(event)" class="space-y-4 hidden">
+        <div><label class="block text-sm font-medium mb-1">Full Name</label><input type="text" id="reg-l-name" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="reg-l-email" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="reg-l-pass" required class="input-dark"></div>
+        <button type="submit" class="btn-primary w-full py-3">Register Lab Tech</button>
+      </form>
+      <form id="form-lab-login" onsubmit="handleLabLogin(event)" class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="login-lab-email" required class="input-dark" placeholder="demo.lab@hospital.com"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="login-lab-pass" required class="input-dark" placeholder="Demo@2026"></div>
+        <button type="submit" class="btn-primary w-full py-3">Log In</button>
+      </form>
+    </section>
+
+    <!-- PHARMACY AUTH VIEW -->
+    <section id="view-pharmacy-auth" class="view-section hidden max-w-md mx-auto glass-card p-8">
+      <h2 class="text-2xl font-bold text-amber-500 mb-6 text-center"><i class="fa-solid fa-pills mr-2"></i>Pharmacy Portal</h2>
+      <div class="flex border-b mb-6">
+        <button onclick="toggleAuthMode('pharmacy', 'login')" id="ph-login-tab" class="flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500">Login</button>
+        <button onclick="toggleAuthMode('pharmacy', 'register')" id="ph-reg-tab" class="flex-1 pb-2 font-semibold text-slate-400">Register</button>
+      </div>
+      <form id="form-pharmacy-register" onsubmit="handlePharmacyRegister(event)" class="space-y-4 hidden">
+        <div><label class="block text-sm font-medium mb-1">Full Name</label><input type="text" id="reg-ph-name" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="reg-ph-email" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="reg-ph-pass" required class="input-dark"></div>
+        <button type="submit" class="btn-primary w-full py-3">Register Pharmacy Staff</button>
+      </form>
+      <form id="form-pharmacy-login" onsubmit="handlePharmacyLogin(event)" class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="login-pharm-email" required class="input-dark" placeholder="demo.pharmacy@hospital.com"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="login-pharm-pass" required class="input-dark" value="Pharmacy@2026"></div>
+        <button type="submit" class="btn-primary w-full py-3">Log In</button>
+      </form>
+    </section>
+
+    <!-- ADMIN AUTH VIEW -->
+    <section id="view-admin-auth" class="view-section hidden max-w-md mx-auto glass-card p-8">
+      <h2 class="text-2xl font-bold text-amber-500 mb-6 text-center"><i class="fa-solid fa-shield-halved mr-2"></i>Admin Portal</h2>
+      <div class="flex border-b mb-6">
+        <button onclick="toggleAuthMode('admin', 'login')" id="ad-login-tab" class="flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500">Login</button>
+        <button onclick="toggleAuthMode('admin', 'register')" id="ad-reg-tab" class="flex-1 pb-2 font-semibold text-slate-400">Register</button>
+      </div>
+      <form id="form-admin-register" onsubmit="handleAdminRegister(event)" class="space-y-4 hidden">
+        <div><label class="block text-sm font-medium mb-1">Full Name</label><input type="text" id="reg-ad-name" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Email ID</label><input type="email" id="reg-ad-email" required class="input-dark"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="reg-ad-pass" required class="input-dark"></div>
+        <button type="submit" class="btn-primary w-full py-3">Register Admin</button>
+      </form>
+      <form id="form-admin-login" onsubmit="handleAdminLogin(event)" class="space-y-4">
+        <div><label class="block text-sm font-medium mb-1">Admin Email</label><input type="email" id="login-admin-email" required class="input-dark" placeholder="admin@medikiosk.com"></div>
+        <div><label class="block text-sm font-medium mb-1">Password</label><input type="password" id="login-admin-pass" required class="input-dark" value="Admin@2026"></div>
+        <button type="submit" class="btn-primary w-full py-3">Log In</button>
+      </form>
+    </section>
+
+    <!-- PATIENT DASHBOARD -->
+    <section id="view-patient-dashboard" class="view-section hidden space-y-6">
+      <div class="glass-card p-6 md:p-8 flex justify-between items-center">
+        <div>
+          <h2 id="patient-dash-title" class="text-2xl font-bold text-amber-500">Patient Triage & Clinical Summary</h2>
+          <p class="text-sm text-slate-400">Select symptoms or dictate them. The system generates a clinical summary for your assigned specialist.</p>
+        </div>
+        <button type="button" onclick="dictateSymptoms()" class="btn-outline text-xs flex items-center gap-2">
+          <i class="fa-solid fa-microphone text-amber-500"></i> Dictate
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-card p-6 md:p-8">
+          <form onsubmit="submitPatientTriageReport(event)" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Click Symptom Chips or Type Below</label>
+              <div id="symptom-chips" class="flex flex-wrap gap-1.5 pb-3 max-h-48 overflow-y-auto"></div>
+              <textarea id="pat-symptoms" required rows="3" placeholder="Symptoms will appear here..." class="input-dark" oninput="analyzeSymptoms()"></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Duration of Symptoms</label>
+              <input type="text" id="pat-duration" required placeholder="e.g., 3 days, 2 weeks" class="input-dark">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="p-3 rounded-lg border bg-black/40 flex flex-col justify-center">
+                <span class="text-xs font-medium text-slate-400">Recommended Specialist:</span>
+                <span id="recommended-specialist-badge" class="text-sm font-bold text-amber-400">General</span>
+              </div>
+              <div class="p-3 rounded-lg border bg-black/40 flex flex-col justify-center">
+                <span class="text-xs font-medium text-slate-400">Auto-Detected Urgency:</span>
+                <span id="auto-urgency-badge" class="text-sm font-bold text-emerald-400">Normal</span>
+              </div>
+            </div>
+            <input type="hidden" id="pat-specialist-selected" value="General">
+            <input type="hidden" id="pat-urgency-selected" value="Normal">
+            <button type="submit" class="btn-primary w-full py-3">Generate Clinical Summary & Send to Specialist</button>
+          </form>
+        </div>
+
+        <div class="glass-card p-6 md:p-8 space-y-4">
+          <h3 class="text-lg font-bold text-amber-500"><i class="fa-solid fa-file-lines mr-2"></i>Generated Clinical Summaries</h3>
+          <div id="patient-lab-reports-list" class="space-y-3"></div>
+          <div class="pt-4 border-t border-white/10">
+            <h3 class="text-sm font-bold mb-2 text-amber-400">Prescription Medicine Availability Check</h3>
+            <div class="flex gap-2">
+              <input type="text" id="patient-med-check" placeholder="Medicine name (e.g. Paracetamol)" class="input-dark flex-1">
+              <button onclick="reportUnavailableMedicine()" class="btn-outline px-3 text-xs">Report Unavailable</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DONOR DASHBOARD -->
+    <section id="view-donor-dashboard" class="view-section hidden space-y-6">
+      <div class="glass-card p-6 md:p-8 flex justify-between items-center">
+        <div>
+          <h2 id="donor-dash-title" class="text-2xl font-bold text-red-400">Blood Donor Dashboard</h2>
+          <p id="donor-profile-info" class="text-sm text-slate-400"></p>
+        </div>
+      </div>
+      <div class="glass-card p-6">
+        <h3 class="text-lg font-bold mb-4 text-red-400"><i class="fa-solid fa-bullhorn mr-2"></i>Active Emergency Blood Requirements</h3>
+        <div id="donor-blood-requests-list" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- ADMIN DASHBOARD -->
+    <section id="view-admin-dashboard" class="view-section hidden space-y-6">
+      <div class="glass-card p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-amber-500 mb-2">Hospital Admin Dashboard</h2>
+        <p class="text-sm text-slate-400">Post blood requirements and monitor registered donors.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-card p-6">
+          <h3 class="text-lg font-bold text-amber-500 mb-4"><i class="fa-solid fa-droplet mr-2"></i>Post Blood Requirement</h3>
+          <form onsubmit="handlePostBloodRequest(event)" class="space-y-4">
+            <div><label class="block text-sm font-medium mb-1">Patient Name / Ward Ref</label><input type="text" id="admin-blood-patient" required class="input-dark"></div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Required Blood Group</label>
+              <select id="admin-blood-group" required class="input-dark">
+                <option value="A+">A+</option><option value="A-">A-</option>
+                <option value="B+">B+</option><option value="B-">B-</option>
+                <option value="O+">O+</option><option value="O-">O-</option>
+                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+              </select>
+            </div>
+            <div><label class="block text-sm font-medium mb-1">Units Needed</label><input type="number" id="admin-blood-units" required min="1" max="10" value="2" class="input-dark"></div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Urgency Level</label>
+              <select id="admin-blood-urgency" class="input-dark"><option value="Critical">Critical</option><option value="Urgent">Urgent</option><option value="Standard">Standard</option></select>
+            </div>
+            <button type="submit" class="btn-primary w-full">Broadcast Blood Request</button>
+          </form>
+        </div>
+        <div class="glass-card p-6">
+          <h3 class="text-lg font-bold text-red-400 mb-4"><i class="fa-solid fa-users mr-2"></i>Registered Blood Donors Directory</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead><tr class="text-slate-400 border-b border-white/10"><th class="p-2">Name</th><th class="p-2">Blood Group</th><th class="p-2">Email</th></tr></thead>
+              <tbody id="admin-donors-tbody" class="divide-y divide-white/10"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAB TECH DASHBOARD -->
+    <section id="view-lab-dashboard" class="view-section hidden space-y-6">
+      <div class="glass-card p-6 md:p-8 max-w-xl mx-auto">
+        <h2 class="text-2xl font-bold text-amber-500 mb-4"><i class="fa-solid fa-flask-vial mr-2"></i>Send Lab Report</h2>
+        <form onsubmit="handleSendLabReport(event)" class="space-y-4">
+          <div><label class="block text-sm font-medium mb-1">Select Patient</label><select id="lab-patient-select" required class="input-dark"></select></div>
+          <div><label class="block text-sm font-medium mb-1">Assign Doctor Specialization</label><select id="lab-doctor-select" required class="input-dark"></select></div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Urgency Level</label>
+            <select id="lab-urgency-select" required class="input-dark">
+              <option value="Urgent">Urgent</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Normal">Normal</option>
+            </select>
+          </div>
+          <div><label class="block text-sm font-medium mb-1">Test Results Summary</label><textarea id="lab-report-details" required rows="4" class="input-dark"></textarea></div>
+          <button type="submit" class="btn-primary w-full">Transmit Report & Notify Patient</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- PHARMACY DASHBOARD -->
+    <section id="view-pharmacy-dashboard" class="view-section hidden space-y-6">
+      <div class="glass-card p-6 md:p-8">
+        <h2 class="text-2xl font-bold text-amber-500 mb-2"><i class="fa-solid fa-pills mr-2"></i>Pharmacy Inventory & Shortage Alerts</h2>
+        <p class="text-sm text-slate-400">Real-time alerts triggered when medicines are reported unavailable.</p>
+      </div>
+      <div class="glass-card p-6">
+        <h3 class="text-lg font-bold text-amber-500 mb-4">Unavailable Medicine Alerts</h3>
+        <div id="pharmacy-alerts-list" class="space-y-3"><p class="text-sm text-slate-400">No current shortage notifications.</p></div>
+      </div>
+    </section>
+
+    <!-- DOCTOR DASHBOARD (Filtered by Specialty & Urgency Bar Chart) -->
+    <section id="view-doctor-dashboard" class="view-section hidden space-y-6">
+      <div class="glass-card p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 id="doc-dash-title" class="text-2xl font-bold text-amber-500">Doctor Dashboard</h2>
+          <p id="doc-dash-subtitle" class="text-sm text-slate-400"></p>
+        </div>
+        <div class="p-3 rounded-xl border w-full md:w-72 bg-black/40 flex flex-col items-center">
+          <span class="text-xs font-bold uppercase tracking-wider mb-2 font-mono2 text-slate-400">Urgency Distribution Chart</span>
+          <div class="w-full h-32">
+            <canvas id="doctorUrgencyChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card p-6">
+        <h3 class="text-lg font-bold text-amber-500 mb-4">Prioritized Clinical Summaries & Patient Queue</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="text-sm bg-black/20 text-slate-400 border-b border-white/10">
+                <th class="p-3">Urgency</th>
+                <th class="p-3">Patient Name</th>
+                <th class="p-3">Clinical Summary / Report</th>
+                <th class="p-3">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="doctor-reports-tbody" class="divide-y divide-white/10 text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- JavaScript Application Logic -->
+  <script>
+    const comprehensiveSymptoms = [
+      "Chest pain", "Breathlessness", "Palpitations", "Dizziness", "Fainting", "Swelling of legs",
+      "Itching", "Rash", "Redness", "Acne", "Dry skin", "Hair loss", "Skin discoloration",
+      "Headache", "Seizures", "Numbness", "Weakness", "Tremors", "Memory problems",
+      "Joint pain", "Stiffness", "Back pain", "Difficulty walking", "Reduced movement",
+      "Fever", "Cough", "Vomiting", "Diarrhea", "Poor appetite", "Delayed development",
+      "Irregular periods", "Heavy bleeding", "Pelvic pain", "Vaginal discharge", "Menstrual cramps",
+      "Blurred vision", "Eye pain", "Watery eyes",
+      "Excessive thirst", "Frequent urination", "Unexplained weight changes", "Fatigue", "Excessive sweating", "Heat or cold intolerance",
+      "Abdominal pain", "Acidity", "Heartburn", "Bloating", "Constipation", "Jaundice", "Loss of appetite",
+      "Swelling of legs or face", "Reduced urine output", "Blood in urine", "Foamy urine", "High blood pressure",
+      "Pain while urinating", "Difficulty urinating", "Lower abdominal pain", "Flank pain",
+      "Persistent cough", "Wheezing", "Chest tightness", "Coughing up blood", "Excessive mucus production",
+      "Unexplained weight loss", "Persistent lumps", "Unusual bleeding", "Prolonged fatigue", "Persistent pain", "Changes in moles",
+      "Persistent sadness", "Excessive worry", "Mood changes", "Sleep problems", "Unusual thoughts", "Panic attacks", "Difficulty concentrating"
+    ];
+
+    const specialtiesMapping = [
+      { name: "Cardiologist", keywords: ["chest pain", "breathlessness", "palpitations", "dizziness", "fainting", "swelling of legs"] },
+      { name: "Dermatologist", keywords: ["itching", "rash", "redness", "acne", "dry skin", "hair loss", "skin discoloration"] },
+      { name: "Neurologist", keywords: ["headache", "seizures", "numbness", "weakness", "tremors", "memory problems"] },
+      { name: "Orthopedician", keywords: ["joint pain", "stiffness", "back pain", "difficulty walking", "reduced movement"] },
+      { name: "Pediatrician", keywords: ["fever", "cough", "vomiting", "diarrhea", "poor appetite", "delayed development"] },
+      { name: "Gynecologist", keywords: ["irregular periods", "heavy bleeding", "pelvic pain", "vaginal discharge", "menstrual cramps"] },
+      { name: "Ophthalmologist", keywords: ["blurred vision", "eye pain", "watery eyes"] },
+      { name: "Endocrinologist", keywords: ["excessive thirst", "frequent urination", "unexplained weight changes", "fatigue", "excessive sweating", "heat or cold intolerance"] },
+      { name: "Gastroenterologist", keywords: ["abdominal pain", "acidity", "heartburn", "bloating", "constipation", "jaundice", "loss of appetite"] },
+      { name: "Nephrologist", keywords: ["swelling of legs or face", "reduced urine output", "blood in urine", "foamy urine", "high blood pressure"] },
+      { name: "Urologist", keywords: ["pain while urinating", "difficulty urinating", "lower abdominal pain", "flank pain"] },
+      { name: "Pulmonologist", keywords: ["persistent cough", "wheezing", "chest tightness", "coughing up blood", "excessive mucus production"] },
+      { name: "Oncologist", keywords: ["unexplained weight loss", "persistent lumps", "unusual bleeding", "prolonged fatigue", "persistent pain", "changes in moles"] },
+      { name: "Psychiatrist", keywords: ["persistent sadness", "excessive worry", "mood changes", "sleep problems", "unusual thoughts", "panic attacks", "difficulty concentrating"] }
+    ];
+
+    let currentUser = JSON.parse(localStorage.getItem('medikiosk_current_user')) || null;
+    let patients = JSON.parse(localStorage.getItem('medikiosk_patients')) || [];
+    let donors = JSON.parse(localStorage.getItem('medikiosk_donors')) || [];
+    let doctors = JSON.parse(localStorage.getItem('medikiosk_doctors')) || [];
+    let labtechs = JSON.parse(localStorage.getItem('medikiosk_labtechs')) || [];
+    let pharmacyStaff = JSON.parse(localStorage.getItem('medikiosk_pharmacy')) || [];
+    let admins = JSON.parse(localStorage.getItem('medikiosk_admins')) || [];
+    let bloodRequests = JSON.parse(localStorage.getItem('medikiosk_blood_requests')) || [];
+    let labReports = JSON.parse(localStorage.getItem('medikiosk_lab_reports')) || [];
+    let pharmacyAlerts = JSON.parse(localStorage.getItem('medikiosk_pharmacy_alerts')) || [];
+    let doctorChartInstance = null;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      seedDefaultData();
+      populateSymptomChips();
+      checkAuthState();
+    });
+
+    function seedDefaultData() {
+      if (patients.length === 0) patients.push({id: 1, name: 'John Patient', email: 'demo.patient@gmail.com', password: 'Demo@2026', age: 30});
+      if (donors.length === 0) donors.push({id: 2, name: 'Sarah Donor', email: 'demo.donor@gmail.com', password: 'Donor@2026', bloodGroup: 'O+'});
+      if (doctors.length === 0) doctors.push({id: 101, name: 'Dr. Robert Smith', email: 'demo.doctor@gmail.com', password: 'Demo@2026', specialty: 'Cardiologist'});
+      if (labtechs.length === 0) labtechs.push({id: 501, name: 'Lead Lab Tech', email: 'demo.lab@hospital.com', password: 'Demo@2026'});
+      if (pharmacyStaff.length === 0) pharmacyStaff.push({id: 701, name: 'Pharmacy Staff', email: 'demo.pharmacy@hospital.com', password: 'Pharmacy@2026'});
+      if (admins.length === 0) admins.push({id: 999, name: 'Admin User', email: 'admin@medikiosk.com', password: 'Admin@2026'});
+      persistStores();
+    }
+
+    function persistStores() {
+      localStorage.setItem('medikiosk_patients', JSON.stringify(patients));
+      localStorage.setItem('medikiosk_donors', JSON.stringify(donors));
+      localStorage.setItem('medikiosk_doctors', JSON.stringify(doctors));
+      localStorage.setItem('medikiosk_labtechs', JSON.stringify(labtechs));
+      localStorage.setItem('medikiosk_pharmacy', JSON.stringify(pharmacyStaff));
+      localStorage.setItem('medikiosk_admins', JSON.stringify(admins));
+      localStorage.setItem('medikiosk_blood_requests', JSON.stringify(bloodRequests));
+      localStorage.setItem('medikiosk_lab_reports', JSON.stringify(labReports));
+      localStorage.setItem('medikiosk_pharmacy_alerts', JSON.stringify(pharmacyAlerts));
+    }
+
+    function switchTab(viewId) {
+      document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+      const sec = document.getElementById(`view-${viewId}`);
+      if (sec) sec.classList.remove('hidden');
+    }
+
+    function toggleAuthMode(portal, mode) {
+      const isLogin = mode === 'login';
+      const prefixes = { patient: 'p', donor: 'donor', doctor: 'd', lab: 'l', pharmacy: 'ph', admin: 'ad' };
+      const pre = prefixes[portal];
+      const loginForm = document.getElementById(`form-${portal}-login`);
+      const regForm = document.getElementById(`form-${portal}-register`);
+      const loginTab = document.getElementById(`${pre}-login-tab`);
+      const regTab = document.getElementById(`${pre}-reg-tab`);
+
+      if (loginForm && regForm && loginTab && regTab) {
+        if (isLogin) {
+          loginForm.classList.remove('hidden'); regForm.classList.add('hidden');
+          loginTab.className = portal === 'donor' ? "flex-1 pb-2 font-semibold border-b-2 border-red-500 text-red-400" : "flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500";
+          regTab.className = "flex-1 pb-2 font-semibold text-slate-400";
+        } else {
+          loginForm.classList.add('hidden'); regForm.classList.remove('hidden');
+          regTab.className = portal === 'donor' ? "flex-1 pb-2 font-semibold border-b-2 border-red-500 text-red-400" : "flex-1 pb-2 font-semibold border-b-2 border-amber-500 text-amber-500";
+          loginTab.className = "flex-1 pb-2 font-semibold text-slate-400";
+        }
+      }
+    }
+
+    function handlePatientRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-p-name').value.trim();
+      const email = document.getElementById('reg-p-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-p-pass').value;
+      const age = document.getElementById('reg-p-age').value;
+      if (patients.some(p => p.email === email)) { alert('Email already registered.'); return; }
+      patients.push({id: Date.now(), name, email, password, age});
+      persistStores(); alert('Patient registered successfully!');
+      toggleAuthMode('patient', 'login'); document.getElementById('login-p-email').value = email;
+    }
+    function handlePatientLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-p-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-p-pass').value;
+      const patient = patients.find(p => p.email === email && p.password === password);
+      if (!patient) { alert('Invalid credentials.'); return; }
+      currentUser = {...patient, type: 'patient'};
+      localStorage.setItem('medikiosk_current_user', JSON.stringify(currentUser));
+      checkAuthState();
+    }
+    function handleDonorRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-donor-name').value.trim();
+      const email = document.getElementById('reg-donor-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-donor-pass').value;
+      const bloodGroup = document.getElementById('reg-donor-blood').value;
+      if (donors.some(d => d.email === email)) { alert('Email already registered.'); return; }
+      donors.push({id: Date.now(), name, email, password, bloodGroup});
+      persistStores(); alert('Donor registered successfully!');
+      toggleAuthMode('donor', 'login'); document.getElementById('login-donor-email').value = email;
+    }
+    function handleDonorLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-donor-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-donor-pass').value;
+      const donor = donors.find(d => d.email === email && d.password === password);
+      if (!donor) { alert('Invalid credentials.'); return; }
+      currentUser = {...donor, type: 'donor'};
+      localStorage.setItem('medikiosk_current_user', JSON.stringify(currentUser));
+      checkAuthState();
+    }
+    function handleDoctorRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-d-name').value.trim();
+      const email = document.getElementById('reg-d-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-d-pass').value;
+      const specialty = document.getElementById('reg-d-spec').value;
+      if (doctors.some(d => d.email === email)) { alert('Email already registered.'); return; }
+      doctors.push({id: Date.now(), name, email, password, specialty});
+      persistStores(); alert('Doctor registered successfully!');
+      toggleAuthMode('doctor', 'login'); document.getElementById('login-d-email').value = email;
+    }
+    function handleDoctorLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-d-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-d-pass').value;
+      const doc = doctors.find(d => d.email === email && d.password === password);
+      if (!doc) { alert('Invalid credentials.'); return; }
+      currentUser = {...doc, type: 'doctor'};
+      localStorage.setItem('medikiosk_current_user', JSON.stringify(currentUser));
+      checkAuthState();
+    }
+    function handleLabRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-l-name').value.trim();
+      const email = document.getElementById('reg-l-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-l-pass').value;
+      if (labtechs.some(l => l.email === email)) { alert('Email already registered.'); return; }
+      labtechs.push({id: Date.now(), name, email, password});
+      persistStores(); alert('Lab tech registered successfully!');
+      toggleAuthMode('lab', 'login'); document.getElementById('login-lab-email').value = email;
+    }
+    function handleLabLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-lab-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-lab-pass').value;
+      const lab = labtechs.find(l => l.email === email && l.password === password);
+      if (!lab) { alert('Invalid credentials.'); return; }
+      currentUser = {...lab, type: 'labtech'};
+      localStorage.setItem('medikiosk_current_user', JSON.stringify(currentUser));
+      checkAuthState();
+    }
+    function handlePharmacyRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-ph-name').value.trim();
+      const email = document.getElementById('reg-ph-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-ph-pass').value;
+      if (pharmacyStaff.some(p => p.email === email)) { alert('Email already registered.'); return; }
+      pharmacyStaff.push({id: Date.now(), name, email, password});
+      persistStores(); alert('Pharmacy staff registered successfully!');
+      toggleAuthMode('pharmacy', 'login'); document.getElementById('login-pharm-email').value = email;
+    }
+    function handlePharmacyLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-pharm-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-pharm-pass').value;
+      const pharm = pharmacyStaff.find(p => p.email === email && p.password === password);
+      if (!pharm) { alert('Invalid credentials.'); return; }
+      currentUser = {...pharm, type: 'pharmacy'};
+      localStorage.setItem('medikiosk_current_user', JSON.stringify(currentUser));
+      checkAuthState();
+    }
+    function handleAdminRegister(e) {
+      e.preventDefault();
+      const name = document.getElementById('reg-ad-name').value.trim();
+      const email = document.getElementById('reg-ad-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-ad-pass').value;
+      if (admins.some(a => a.email === email)) { alert('Email already registered.'); return; }
+      admins.push({id: Date.now(), name, email, password});
+      persistStores(); alert('Admin registered successfully!');
+      toggleAuthMode('admin', 'login'); document.getElementById('login-admin-email').value = email;
+    }
+    function handleAdminLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-admin-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-admin-pass').value;
+      const adm = admins.find(a => a.email === email && a.password === password);
+      if (!adm) { alert('Invalid credentials.'); return; }
+      currentUser = {...adm, type: 'admin'};
+      localStorage.setItem('medikiosk_current_user', JSON.stringify(currentUser));
+      checkAuthState();
+    }
+
+    function logout() {
+      currentUser = null;
+      localStorage.removeItem('medikiosk_current_user');
+      checkAuthState();
+      switchTab('home');
+    }
+
+    function checkAuthState() {
+      const navAuth = document.getElementById('nav-auth');
+      const navUser = document.getElementById('nav-user');
+      const userWelcome = document.getElementById('user-welcome');
+
+      if (currentUser) {
+        navAuth.classList.add('hidden');
+        navUser.classList.remove('hidden');
+        userWelcome.textContent = `Logged in: ${currentUser.name} (${currentUser.type})`;
+
+        if (currentUser.type === 'patient') { switchTab('patient-dashboard'); loadPatientDashboard(); }
+        else if (currentUser.type === 'donor') { switchTab('donor-dashboard'); loadDonorDashboard(); }
+        else if (currentUser.type === 'admin') { switchTab('admin-dashboard'); loadAdminDashboard(); }
+        else if (currentUser.type === 'labtech') { switchTab('lab-dashboard'); loadLabDashboard(); }
+        else if (currentUser.type === 'pharmacy') { switchTab('pharmacy-dashboard'); loadPharmacyDashboard(); }
+        else if (currentUser.type === 'doctor') { switchTab('doctor-dashboard'); loadDoctorDashboard(); }
+      } else {
+        navAuth.classList.remove('hidden');
+        navUser.classList.add('hidden');
+        switchTab('home');
+      }
+    }
+
+    function populateSymptomChips() {
+      const container = document.getElementById('symptom-chips');
+      if (!container) return;
+      container.innerHTML = '';
+      comprehensiveSymptoms.forEach(sym => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = "px-2.5 py-1 rounded-md text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 cursor-pointer";
+        btn.textContent = `+ ${sym}`;
+        btn.onclick = () => {
+          const ta = document.getElementById('pat-symptoms');
+          ta.value = ta.value ? `${ta.value},${sym}` : sym;
+          analyzeSymptoms();
+        };
+        container.appendChild(btn);
+      });
+    }
+
+    function analyzeSymptoms() {
+      const text = document.getElementById('pat-symptoms').value.toLowerCase();
+      const badgeSpec = document.getElementById('recommended-specialist-badge');
+      const hiddenSpec = document.getElementById('pat-specialist-selected');
+      const badgeUrgency = document.getElementById('auto-urgency-badge');
+      const hiddenUrgency = document.getElementById('pat-urgency-selected');
+
+      let bestMatch = "General Physician";
+      let maxScore = 0;
+      specialtiesMapping.forEach(spec => {
+        let score = 0;
+        spec.keywords.forEach(kw => {
+          if (text.includes(kw.toLowerCase())) score++;
+        });
+        if (score > maxScore) { maxScore = score; bestMatch = spec.name; }
+      });
+      badgeSpec.textContent = bestMatch;
+      hiddenSpec.value = bestMatch;
+
+      const urgentWords = ["chest pain", "breathlessness", "seizures", "fainting", "blood in urine", "coughing up blood", "unexplained weight loss", "stroke", "unconscious"];
+      const moderateWords = ["pain", "fever", "dizziness", "vomiting", "diarrhea", "acne", "swelling", "numbness", "headache"];
+      
+      let calculatedUrgency = "Normal";
+      for (let w of urgentWords) {
+        if (text.includes(w)) { calculatedUrgency = "Urgent"; break; }
+      }
+      if (calculatedUrgency === "Normal") {
+        for (let w of moderateWords) {
+          if (text.includes(w)) { calculatedUrgency = "Moderate"; break; }
+        }
+      }
+
+      badgeUrgency.textContent = calculatedUrgency;
+      hiddenUrgency.value = calculatedUrgency;
+      badgeUrgency.className = calculatedUrgency === "Urgent" ? "text-sm font-bold text-red-400 animate-pulse" : calculatedUrgency === "Moderate" ? "text-sm font-bold text-amber-400" : "text-sm font-bold text-emerald-400";
+    }
+
+    function dictateSymptoms() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { alert('Speech recognition not supported.'); return; }
+      const rec = new SpeechRecognition();
+      rec.lang = 'en-US';
+      document.getElementById('voice-status-text').textContent = 'Listening for symptoms...';
+      rec.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        document.getElementById('pat-symptoms').value = transcript;
+        analyzeSymptoms();
+        document.getElementById('voice-status-text').textContent = 'Voice Ready';
+      };
+      rec.start();
+    }
+
+    function toggleVoiceListening() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) return;
+      const rec = new SpeechRecognition();
+      rec.onresult = (e) => {
+        const cmd = e.results[0][0].transcript.toLowerCase();
+        if (cmd.includes('patient')) switchTab('patient-auth');
+        else if (cmd.includes('doctor')) switchTab('doctor-auth');
+      };
+      rec.start();
+    }
+
+    function submitPatientTriageReport(e) {
+      e.preventDefault();
+      const symptoms = document.getElementById('pat-symptoms').value;
+      const duration = document.getElementById('pat-duration').value;
+      const specialist = document.getElementById('pat-specialist-selected').value;
+      const urgency = document.getElementById('pat-urgency-selected').value;
+
+      // Automatically generated clinical summary
+      const clinicalSummary = `[Clinical Summary] Patient reports symptoms of [ ${symptoms} ] lasting for duration [${duration} ]. Triage Assessment: Assigned to ${specialist} with${urgency} priority level.`;
+
+      const report = {
+        id: 'REP-' + Math.floor(100000 + Math.random() * 900000),
+        patientId: currentUser.id,
+        patientName: currentUser.name,
+        specialist,
+        urgency,
+        details: clinicalSummary,
+        date: new Date().toLocaleString()
+      };
+
+      labReports.push(report);
+      persistStores();
+      alert(`Clinical summary generated successfully and forwarded to ${specialist}!`);
+      e.target.reset();
+      loadPatientDashboard();
+    }
+
+    function loadPatientDashboard() {
+      const p = patients.find(item => item.id === currentUser.id) || currentUser;
+      document.getElementById('patient-dash-title').textContent = `Welcome, ${p.name}`;
+      const myReports = labReports.filter(r => r.patientId === p.id);
+      const repList = document.getElementById('patient-lab-reports-list');
+      repList.innerHTML = myReports.length === 0 ? '<p class="text-sm text-slate-400">No clinical summaries or reports generated yet.</p>' : '';
+      myReports.forEach(rep => {
+        const urgencyColor = rep.urgency === 'Urgent' ? 'bg-red-500/20 text-red-400' : rep.urgency === 'Moderate' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400';
+        repList.innerHTML += `
+          <div class="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-amber-400 font-bold"><i class="fa-solid fa-user*

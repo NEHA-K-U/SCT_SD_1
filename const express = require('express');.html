@@ -1,0 +1,380 @@
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcryptjs');
+
+const app = express();
+const PORT = 3000;
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Initialize SQLite Database (creates medikiosk.db automatically)
+const db = new sqlite3.Database('./medikiosk.db', (err) => {
+    if (err) console.error('Database opening error: ', err.message);
+    else console.log('Connected to SQLite database.');
+});
+
+// Create tables for Patients, Doctors, and Triage Queues
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS patients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        password TEXT
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS doctors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        email TEXT UNIQUE,
+        specialization TEXT,
+        password TEXT
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS triage_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        patient_id INTEGER,
+        patient_name TEXT,
+        symptoms TEXT,
+        urgency_level TEXT,
+        status TEXT DEFAULT 'Waiting',
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+});
+
+// ==================== API ROUTES ====================
+
+// Patient Register
+app.post('/api/patient/register', async (req, res) => {
+    const { name, email, password } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        db.run(`INSERT INTO patients (name, email, password) VALUES (?, ?, ?)`, 
+            [name, email, hashedPassword], 
+            function(err) {
+                if (err) return res.status(400).json({ error: 'Email already exists or invalid data.' });
+                res.json({ success: true, patientId: this.lastID, name });
+            }
+        );
+    } catch (e) {
+        res.status(500).json({ error: 'Server error during registration.' });
+    }
+});
+
+// Patient Login
+app.post('/api/patient/login', (req, res) => {
+    const { email, password } = req.body;
+    db.get(`SELECT * FROM patients WHERE email = ?`, [email], async (err, user) => {
+        if (err || !user) return res.status(400).json({ error: 'Invalid email or password.' });
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) return res.status(400).json({ error: 'Invalid email or password.' });
+        res.json({ success: true, patientId: user.id, name: user.name });
+    });
+});
+
+// Doctor Register
+app.post('/api/doctor/register', async (req, res) => {
+    const { name, email, specialization, password } = req.body;
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        db.run(`INSERT INTO doctors (name, email, specialization, password) VALUES (?, ?, ?, ?)`, 
+            [name, email, specialization, hashedPassword], 
+            function(err) {
+                if (err) return res.status(400).json({ error: 'Email already exists.' });
+                res.json({ success: true, doctorId: this.lastID, name });
+            }
+        );
+    } catch (e) {
+        res.status(500).json({ error: 'Server error.' });
+    }
+});
+
+// Doctor Login
+app.post('/api/doctor/login', (req, res) => {
+    const { email, password } = req.body;
+    db.get(`SELECT * FROM doctors WHERE email = ?`, [email], async (err, user) => {
+        if (err || !user) return res.status(400).json({ error: 'Invalid email or password.' });
+        const isValid = await bcrypt.compare(password, user.password);
+        if (!isValid) return res.status(400).json({ error: 'Invalid email or password.' });
+        res.json({ success: true, doctorId: user.id, name: user.name });
+    });
+});
+
+// Submit Triage Entry from Kiosk
+app.post('/api/triage/submit', (req, res) => {
+    const { patientId, patientName, symptoms, urgencyLevel } = req.body;
+    db.run(`INSERT INTO triage_queue (patient_id, patient_name, symptoms, urgency_level) VALUES (?, ?, ?, ?)`,
+        [patientId, patientName, symptoms, urgencyLevel],
+        function(err) {
+            if (err) return res.status(500).json({ error: 'Failed to submit triage entry.' });
+            res.json({ success: true, queueId: this.lastID });
+        }
+    );
+});
+
+// Fetch Live Queue for Doctors
+app.get('/api/triage/queue', (req, res) => {
+    db.all(`SELECT * FROM triage_queue ORDER BY timestamp DESC`, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: 'Failed to fetch queue.' });
+        res.json(rows);
+    });
+});
+
+
+// ==================== FRONTEND UI (Single Page Router) ====================
+
+app.get('*', (req, res) => {
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MediKiosk Hackathon App</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 90vh; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%; max-width: 600px; box-sizing: border-box; }
+        input, select, textarea { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        button { background: #007bff; color: white; border: none; padding: 12px; width: 100%; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        .tab-bar { display: flex; justify-content: space-around; margin-bottom: 20px; cursor: pointer; font-weight: bold; color: #555; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .tab-bar span.active { color: #007bff; border-bottom: 2px solid #007bff; }
+        .section { display: none; }
+        .section.active { display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; color: white; font-size: 12px; }
+        .critical { background-color: #dc3545; }
+        .urgent { background-color: #ffc107; color: black; }
+        .normal { background-color: #28a745; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="app-container">
+    <!-- RENDERED DYNAMICALLY VIA JS ROUTER -->
+</div>
+
+<script>
+    // Simple SPA Router based on URL Hash or LocalStorage session
+    function render() {
+        const path = window.location.hash;
+        const container = document.getElementById('app-container');
+        
+        if (path === '#patient') {
+            const name = localStorage.getItem('patientName') || 'Patient';
+            container.innerHTML = \`
+                <div class="header-row">
+                    <h2>MediKiosk - Patient Terminal</h2>
+                    <button style="width: auto; padding: 6px 12px; background: #dc3545; margin:0;" onclick="logout()">Logout</button>
+                </div>
+                <p>Welcome, <b>\${name}</b>! Enter your symptoms for real-time triage scoring:</p>
+                <label>Describe your symptoms:</label>
+                <textarea id="symptoms" rows="4" placeholder="e.g., Severe chest tightness and shortness of breath..."></textarea>
+                
+                <label>AI-Estimated Severity Index (ESI):</label>
+                <select id="urgency">
+                    <option value="Level 1 - Critical / Emergency">Level 1 - Critical / Emergency</option>
+                    <option value="Level 2 - High Risk">Level 2 - High Risk</option>
+                    <option value="Level 3 - Urgent">Level 3 - Urgent</option>
+                    <option value="Level 4 - Less Urgent">Level 4 - Less Urgent</option>
+                    <option value="Level 5 - Non-Urgent">Level 5 - Non-Urgent</option>
+                </select>
+                <button onclick="submitTriage()" style="background: #28a745;">Submit to Triage Queue</button>
+            \`;
+        } else if (path === '#doctor') {
+            const name = localStorage.getItem('doctorName') || 'Doctor';
+            container.innerHTML = \`
+                <div class="header-row">
+                    <h2>Doctor Live Triage Monitor (\${name})</h2>
+                    <button style="width: auto; padding: 6px 12px; background: #dc3545; margin:0;" onclick="logout()">Logout</button>
+                </div>
+                <p>Live incoming patients from active kiosks (Auto-refreshes every 3s):</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Patient Name</th>
+                            <th>Symptoms</th>
+                            <th>Urgency Level</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queue-table"></tbody>
+                </table>
+            \`;
+            loadQueue();
+            window.queueInterval = setInterval(loadQueue, 3000);
+        } else {
+            // Default Landing: Auth screen
+            if(window.queueInterval) clearInterval(window.queueInterval);
+            container.innerHTML = \`
+                <h2>MediKiosk Portal</h2>
+                <div class="tab-bar">
+                    <span id="tab-p" class="active" onclick="switchAuthTab('patient')">Patient Portal</span>
+                    <span id="tab-d" onclick="switchAuthTab('doctor')">Doctor Portal</span>
+                </div>
+
+                <div id="auth-patient">
+                    <div style="margin-bottom:15px; font-size:14px; color:#666;">
+                        <span id="p-log-btn" style="cursor:pointer; font-weight:bold; color:#007bff;" onclick="toggleAuthMode('patient', 'login')">Login</span> | 
+                        <span id="p-reg-btn" style="cursor:pointer; color:#555;" onclick="toggleAuthMode('patient', 'register')">Register</span>
+                    </div>
+                    <div id="p-form-content">
+                        <input type="email" id="p-email" placeholder="Email Address">
+                        <input type="password" id="p-password" placeholder="Password">
+                        <button onclick="handleAuth('patient', 'login')">Patient Login</button>
+                    </div>
+                </div>
+
+                <div id="auth-doctor" style="display:none;">
+                    <div style="margin-bottom:15px; font-size:14px; color:#666;">
+                        <span id="d-log-btn" style="cursor:pointer; font-weight:bold; color:#007bff;" onclick="toggleAuthMode('doctor', 'login')">Login</span> | 
+                        <span id="d-reg-btn" style="cursor:pointer; color:#555;" onclick="toggleAuthMode('doctor', 'register')">Register</span>
+                    </div>
+                    <div id="d-form-content">
+                        <input type="email" id="d-email" placeholder="Doctor Email">
+                        <input type="password" id="d-password" placeholder="Password">
+                        <button onclick="handleAuth('doctor', 'login')">Doctor Login</button>
+                    </div>
+                </div>
+            \`;
+        }
+    }
+
+    let currentRoleTab = 'patient';
+    let currentAuthMode = 'login';
+
+    function switchAuthTab(role) {
+        currentRoleTab = role;
+        document.getElementById('tab-p').classList.toggle('active', role === 'patient');
+        document.getElementById('tab-d').classList.toggle('active', role === 'doctor');
+        document.getElementById('auth-patient').style.display = role === 'patient' ? 'block' : 'none';
+        document.getElementById('auth-doctor').style.display = role === 'doctor' ? 'block' : 'none';
+    }
+
+    function toggleAuthMode(role, mode) {
+        currentAuthMode = mode;
+        const prefix = role === 'patient' ? 'p' : 'd';
+        document.getElementById(\`\${prefix}-log-btn\`).style.fontWeight = mode === 'login' ? 'bold' : 'normal';
+        document.getElementById(\`\${prefix}-log-btn\`).style.color = mode === 'login' ? '#007bff' : '#555';
+        document.getElementById(\`\${prefix}-reg-btn\`).style.fontWeight = mode === 'register' ? 'bold' : 'normal';
+        document.getElementById(\`\${prefix}-reg-btn\`).style.color = mode === 'register' ? '#007bff' : '#555';
+
+        const container = document.getElementById(\`\${prefix}-form-content\`);
+        if (mode === 'login') {
+            container.innerHTML = \`
+                <input type="email" id="\${prefix}-email" placeholder="\${role === 'doctor' ? 'Doctor ' : ''}Email">
+                <input type="password" id="\${prefix}-password" placeholder="Password">
+                <button onclick="handleAuth('\${role}', 'login')">\${role.charAt(0).toUpperCase() + role.slice(1)} Login</button>
+            \`;
+        } else {
+            container.innerHTML = \`
+                <input type="text" id="\${prefix}-name" placeholder="Full Name">
+                \${role === 'doctor' ? '<input type="text" id="d-spec" placeholder="Specialization (e.g. ER, Cardiology)">' : ''}
+                <input type="email" id="\${prefix}-email" placeholder="Email">
+                <input type="password" id="\${prefix}-password" placeholder="Password">
+                <button onclick="handleAuth('\${role}', 'register')">Register \${role.charAt(0).toUpperCase() + role.slice(1)}</button>
+            \`;
+        }
+    }
+
+    async function handleAuth(role, mode) {
+        const prefix = role === 'patient' ? 'p' : 'd';
+        const email = document.getElementById(\`\${prefix}-email\`).value;
+        const password = document.getElementById(\`\${prefix}-password\`).value;
+        let body = { email, password };
+
+        if (mode === 'register') {
+            body.name = document.getElementById(\`\${prefix}-name\`).value;
+            if (role === 'doctor') body.specialization = document.getElementById('d-spec').value;
+        }
+
+        const res = await fetch(\`/api/\${role}/\${mode}\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            if (role === 'patient') {
+                localStorage.setItem('patientId', data.patientId);
+                localStorage.setItem('patientName', data.name);
+                window.location.hash = 'patient';
+            } else {
+                localStorage.setItem('doctorId', data.doctorId);
+                localStorage.setItem('doctorName', data.name);
+                window.location.hash = 'doctor';
+            }
+        } else {
+            alert(data.error || 'Authentication failed.');
+        }
+    }
+
+    async function submitTriage() {
+        const patientId = localStorage.getItem('patientId');
+        const patientName = localStorage.getItem('patientName');
+        const symptoms = document.getElementById('symptoms').value;
+        const urgencyLevel = document.getElementById('urgency').value;
+
+        if(!symptoms.trim()) {
+            alert('Please describe your symptoms.');
+            return;
+        }
+
+        const res = await fetch('/api/triage/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ patientId, patientName, symptoms, urgencyLevel })
+        });
+        const data = await res.json();
+        if(data.success) {
+            alert('Checked into kiosk queue successfully!');
+            document.getElementById('symptoms').value = '';
+        } else {
+            alert('Submission error.');
+        }
+    }
+
+    async function loadQueue() {
+        const res = await fetch('/api/triage/queue');
+        const queue = await res.json();
+        const tbody = document.getElementById('queue-table');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+
+        queue.forEach(item => {
+            let badgeClass = 'normal';
+            if(item.urgency_level.includes('Level 1') || item.urgency_level.includes('Level 2')) badgeClass = 'critical';
+            else if(item.urgency_level.includes('Level 3')) badgeClass = 'urgent';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = \`
+                <td>\${new Date(item.timestamp).toLocaleTimeString()}</td>
+                <td><b>\${item.patient_name}</b></td>
+                <td>\${item.symptoms}</td>
+                <td><span class="badge \${badgeClass}">\${item.urgency_level}</span></td>
+            \`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function logout() {
+        localStorage.clear();
+        window.location.hash = '';
+        render();
+    }
+
+    window.addEventListener('hashchange', render);
+    window.addEventListener('load', render);
+</script>
+</body>
+</html>
+    `);
+});
+
+app.listen(PORT, () => {
+    console.log(`MediKiosk running locally at http://localhost:${PORT}`);
+});
